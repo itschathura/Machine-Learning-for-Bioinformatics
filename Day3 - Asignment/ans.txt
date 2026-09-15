@@ -1,0 +1,278 @@
+# =========================
+# Q1 - LOAD AND EXPLORE DATA
+# =========================
+
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import ttest_ind
+from upsetplot import UpSet, from_indicators
+
+# Load dataset
+df = pd.read_csv("bioinformatics_visualization_practice_dataset.csv")
+
+# Display dataset
+print(df)
+
+# First 5 rows
+print(df.head())
+
+# Rows and columns
+print("Shape:", df.shape)
+
+# Column names
+print("Columns:", df.columns)
+
+# Data types
+print(df.dtypes)
+
+# Missing values
+print(df.isnull().sum())
+
+
+# =========================
+# Q2 - BAR CHART
+# =========================
+
+count = df["Disease_Status"].value_counts()
+
+print(count)
+
+count.plot(kind="bar")
+
+plt.title("Number of Patients by Disease Status")
+plt.xlabel("Disease Status")
+plt.ylabel("Number of Patients")
+plt.show()
+
+print("Highest group:", count.idxmax())
+
+
+# =========================
+# Q3 - CLUSTERED BAR CHART
+# =========================
+
+mean_gene = df.groupby("Disease_Status")[
+    ["Gene_A_Expression", "Gene_B_Expression", "Gene_C_Expression"]
+].mean()
+
+print(mean_gene)
+
+mean_gene.plot(kind="bar")
+
+plt.title("Mean Gene Expression")
+plt.xlabel("Disease Status")
+plt.ylabel("Mean Expression")
+plt.legend(["Gene A", "Gene B", "Gene C"])
+plt.show()
+
+print("Group with highest overall expression:",
+      mean_gene.mean(axis=1).idxmax())
+
+
+# =========================
+# Q4 - BOX PLOT
+# =========================
+
+sns.boxplot(
+    data=df,
+    x="Disease_Status",
+    y="Gene_A_Expression"
+)
+
+plt.title("Gene A Expression by Disease Status")
+plt.xlabel("Disease Status")
+plt.ylabel("Gene A Expression")
+plt.show()
+
+median = df.groupby("Disease_Status")[
+    "Gene_A_Expression"
+].median()
+
+print("Median values:")
+print(median)
+
+print("Highest median:", median.idxmax())
+
+
+# =========================
+# Q5 - VIOLIN PLOT
+# =========================
+
+sns.violinplot(
+    data=df,
+    x="Disease_Status",
+    y="Gene_B_Expression"
+)
+
+plt.title("Gene B Expression by Disease Status")
+plt.xlabel("Disease Status")
+plt.ylabel("Gene B Expression")
+plt.show()
+
+mean_b = df.groupby("Disease_Status")[
+    "Gene_B_Expression"
+].mean()
+
+print("Mean Gene B:")
+print(mean_b)
+
+print("Higher Gene B group:", mean_b.idxmax())
+
+print("Violin width shows the density of data.")
+
+
+# =========================
+# Q6 - CORRELATION HEATMAP
+# =========================
+
+columns = [
+    "Age",
+    "Gene_A_Expression",
+    "Gene_B_Expression",
+    "Gene_C_Expression",
+    "Blood_Pressure",
+    "Glucose"
+]
+
+corr = df[columns].corr()
+
+print(corr)
+
+sns.heatmap(
+    corr,
+    annot=True,
+    cmap="coolwarm"
+)
+
+plt.title("Correlation Heatmap")
+plt.show()
+
+# Find strongest positive correlation
+corr2 = corr.copy()
+
+for i in range(len(corr2)):
+    corr2.iloc[i, i] = 0
+
+print("Strongest positive correlation:")
+
+print(corr2.stack().idxmax())
+print(corr2.stack().max())
+
+
+# =========================
+# Q7 - VOLCANO PLOT
+# =========================
+
+genes = [
+    "Gene_A_Expression",
+    "Gene_B_Expression",
+    "Gene_C_Expression"
+]
+
+disease = df[df["Disease_Status"] == "Disease"]
+healthy = df[df["Disease_Status"] == "Healthy"]
+
+results = []
+
+for gene in genes:
+
+    disease_mean = disease[gene].mean()
+    healthy_mean = healthy[gene].mean()
+
+    log2fc = np.log2(disease_mean / healthy_mean)
+
+    p = ttest_ind(
+        disease[gene].dropna(),
+        healthy[gene].dropna()
+    ).pvalue
+
+    results.append([
+        gene,
+        disease_mean,
+        healthy_mean,
+        log2fc,
+        p
+    ])
+
+result = pd.DataFrame(
+    results,
+    columns=[
+        "Gene",
+        "Disease Mean",
+        "Healthy Mean",
+        "Log2FC",
+        "P-value"
+    ]
+)
+
+print(result)
+
+
+# Volcano plot
+
+result["-log10(p)"] = -np.log10(result["P-value"])
+
+plt.scatter(
+    result["Log2FC"],
+    result["-log10(p)"]
+)
+
+for i in range(len(result)):
+    plt.text(
+        result["Log2FC"][i],
+        result["-log10(p)"][i],
+        result["Gene"][i]
+    )
+
+plt.axvline(0.5, color="red", linestyle="--")
+plt.axvline(-0.5, color="red", linestyle="--")
+plt.axhline(-np.log10(0.05), color="blue", linestyle="--")
+
+plt.xlabel("Log2 Fold Change")
+plt.ylabel("-Log10(P-value)")
+plt.title("Volcano Plot")
+plt.show()
+
+# Significant genes
+print("Significant genes:")
+
+print(
+    result[
+        (abs(result["Log2FC"]) > 0.5) &
+        (result["P-value"] < 0.05)
+    ]["Gene"]
+)
+
+
+# =========================
+# Q8 - UPSET PLOT
+# =========================
+
+mutation = df[
+    ["Mutation_A", "Mutation_B", "Mutation_C"]
+].replace({
+    "Yes": True,
+    "No": False
+})
+
+print(mutation)
+
+# Create UpSet plot
+data = from_indicators(
+    mutation.columns,
+    mutation
+)
+
+UpSet(
+    data,
+    show_counts=True
+).plot()
+
+plt.show()
+
+# Most common combination
+print("Most common mutation combination:")
+
+print(mutation.value_counts().head(1))
